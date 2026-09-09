@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Préstamos Pro - Nube</title>
+    <!-- Importar la librería de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* === VARIABLES Y DISEÑO BASE === */
+        :root {
+            --primary: #1e3a8a;
+            --primary-light: #2563eb;
+            --secondary: #475569;
+            --success: #10b981;
+            --success-bg: #d1fae5;
+            --danger: #ef4444;
+            --danger-bg: #fee2e2;
+            --warning: #f59e0b;
+            --bg-body: #f4f7f6;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        body { background-color: var(--bg-body); color: var(--text-main); line-height: 1.5; }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        .view { display: none; }
+        .view.active { display: block; animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        header.top-bar { display: flex; justify-content: space-between; align-items: center; background-color: #0f172a; color: white; padding: 20px 30px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        header.top-bar h2 { font-weight: 600; letter-spacing: 0.5px; font-size: 1.3rem; }
+
+        .card { background: var(--bg-card); padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom: 25px; border: 1px solid var(--border); }
+        .card-header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--bg-body); padding-bottom: 10px; margin-bottom: 20px; }
+        .card-title { font-size: 1.2rem; font-weight: 600; color: var(--text-main); }
+        .global-debt-badge { background-color: #fef3c7; color: #92400e; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 0.95rem; box-shadow: 0 2px 4px rgba(245, 158, 11, 0.1); }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        .full-width { grid-column: 1 / -1; }
+
+        form { display: flex; flex-direction: column; gap: 15px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-size: 0.9rem; font-weight: 500; color: var(--secondary); }
+        input, select { padding: 12px 15px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; transition: all 0.3s; background-color: #f8fafc; }
+        input:focus, select:focus { outline: none; border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); background-color: #fff; }
+
+        .password-wrapper { position: relative; display: flex; align-items: center; }
+        .password-wrapper input { width: 100%; padding-right: 45px; }
+        .password-toggle { position: absolute; right: 10px; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-muted); padding: 5px; }
+        
+        button { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-primary { background-color: var(--primary-light); color: white; }
+        .btn-primary:hover { background-color: var(--primary); transform: translateY(-1px); }
+        .btn-success { background-color: var(--success); color: white; }
+        .btn-success:hover { background-color: #059669; }
+        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-small { padding: 8px 14px; font-size: 0.85rem; border-radius: 6px; }
+        .btn-icon { padding: 6px; border-radius: 6px; font-size: 1.1rem; }
+        
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background-color: #f8fafc; font-weight: 600; color: var(--secondary); white-space: nowrap; }
+        
+        .client-balance-card { background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: white; text-align: center; padding: 40px 20px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4); margin-bottom: 30px; position: relative; overflow: hidden; }
+        .client-balance-card::after { content: ''; position: absolute; top: -50%; right: -20%; width: 300px; height: 300px; background: rgba(255, 255, 255, 0.1); border-radius: 50%; }
+        .client-balance-card p { font-size: 1.1rem; opacity: 0.9; margin-bottom: 5px; font-weight: 500; }
+        .client-balance-card h1 { font-size: 3.5rem; margin: 0; font-weight: 700; letter-spacing: -1px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+        .client-history-list { display: flex; flex-direction: column; gap: 12px; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #fff; border: 1px solid var(--border); border-radius: 12px; transition: transform 0.2s, box-shadow 0.2s; }
+        .history-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .history-info { display: flex; align-items: center; gap: 15px; }
+        .history-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+        .icon-prestamo { background-color: var(--danger-bg); color: var(--danger); }
+        .icon-pago { background-color: var(--success-bg); color: var(--success); }
+        .history-details h4 { margin: 0; font-size: 1rem; color: var(--text-main); }
+        .history-details p { margin: 2px 0 0 0; font-size: 0.85rem; color: var(--text-muted); }
+        .history-amount { text-align: right; font-size: 1.15rem; font-weight: 700; }
+        .text-red { color: var(--danger); }
+        .text-green { color: var(--success); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 500px; animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes modalPop { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .modal-header h3 { font-size: 1.2rem; margin: 0;}
+        .modal-close { background: none; color: var(--text-muted); font-size: 1.5rem; padding: 0; }
+        
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .client-balance-card h1 { font-size: 2.8rem; }
+            .history-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .history-amount { align-self: flex-end; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- LOGIN -->
+        <div id="login-view" class="view active">
+            <div style="max-width: 400px; margin: 80px auto;">
+                <div class="card" style="padding: 40px 30px; text-align: center;">
+                    <h2 style="margin-bottom: 25px; color: var(--primary);">🔐 Acceso al Sistema</h2>
+                    <form id="login-form">
+                        <input type="text" id="login-user" placeholder="Nombre de usuario" required>
+                        <div class="password-wrapper">
+                            <input type="password" id="login-pass" placeholder="Contraseña" required>
+                            <button type="button" id="toggle-password" class="password-toggle" title="Mostrar/Ocultar">👁️</button>
+                        </div>
+                        <button type="submit" class="btn-primary" style="margin-top: 10px;">Iniciar Sesión</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADMINISTRADOR -->
+        <div id="admin-view" class="view">
+            <header class="top-bar">
+                <h2>👑 Panel de Control</h2>
+                <button class="btn-danger btn-small logout-btn">🚪 Salir</button>
+            </header>
+            
+            <div class="grid">
+                <!-- Crear Cliente -->
+                <div class="card">
+                    <div class="card-header-flex"><h3 class="card-title" style="border:none; margin:0; padding:0;">👤 Registrar Cliente</h3></div>
+                    <form id="create-user-form">
+                        <div class="form-group"><label>Nombre Completo</label><input type="text" id="new-fullname" required></div>
+                        <div class="form-group"><label>Usuario (Login)</label><input type="text" id="new-username" required></div>
+                        <div class="form-group"><label>Contraseña</label><input type="text" id="new-password" required></div>
+                        <button type="submit" class="btn-primary">Crear Cuenta</button>
+                    </form>
+                </div>
+
+                <!-- Registrar Transacción -->
+                <div class="card">
+                    <div class="card-header-flex"><h3 class="card-title" style="border:none; margin:0; padding:0;">💰 Nueva Transacción</h3></div>
+                    <form id="transaction-form">
+                        <div class="form-group"><label>Cliente</label><select id="trans-client" required><option value="">Cargando...</option></select></div>
+                        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group"><label>Tipo</label><select id="trans-type" required><option value="prestamo">🔴 Préstamo</option><option value="pago">🟢 Abono</option></select></div>
+                            <div class="form-group"><label>Monto</label><input type="number" id="trans-amount" required min="1" step="0.01"></div>
+                        </div>
+                        <div class="form-group"><label>Motivo</label><input type="text" id="trans-motive" required></div>
+                        <div class="form-group"><label>Fecha</label>
+                            <select id="trans-date-mode" onchange="toggleDateInput('trans-date-mode', 'trans-date-manual')">
+                                <option value="auto">Automática (Ahora)</option>
+                                <option value="manual">Manual (Elegir fecha)</option>
+                            </select>
+                            <input type="datetime-local" id="trans-date-manual" style="display:none; margin-top:10px;">
+                        </div>
+                        <button type="submit" class="btn-success">Guardar Transacción</button>
+                    </form>
+                </div>
+
+                <!-- Lista de Clientes -->
+                <div class="card full-width">
+                    <div class="card-header-flex">
+                        <h3 class="card-title" style="border:none; margin:0; padding:0;">👥 Directorio de Clientes</h3>
+                        <div class="global-debt-badge">Deuda Global: <span id="admin-global-debt">RD$ 0.00</span></div>
+                    </div>
+                    <div class="table-container">
+                        <table id="admin-clients-table">
+                            <thead><tr><th>Nombre</th><th>Usuario</th><th>Contraseña</th><th>Deuda Actual</th><th>Acciones</th></tr></thead>
+                            <tbody><!-- JS --></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Detalles de Cliente (Admin) -->
+                <div id="admin-client-details" class="card full-width" style="display: none; border: 2px solid var(--primary-light);">
+                    <div class="card-header-flex" style="border:none; margin:0; padding:0;">
+                        <h3 id="admin-detail-name" class="card-title">Detalles</h3>
+                        <button type="button" id="close-admin-details" class="btn-danger btn-small">✖ Cerrar</button>
+                    </div>
+                    <div class="client-balance-card" style="padding: 20px; margin: 15px 0; border-radius:12px;">
+                        <p style="margin:0; font-size:0.9rem; opacity:0.9;">Deuda Actual del Cliente</p>
+                        <h1 id="admin-detail-balance" style="font-size:2.5rem; margin:5px 0;">RD$ 0.00</h1>
+                    </div>
+                    <div class="table-container">
+                        <table id="admin-detail-history">
+                            <thead><tr><th>Fecha</th><th>Tipo</th><th>Motivo</th><th>Monto</th><th>Gestión</th></tr></thead>
+                            <tbody><!-- JS --></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLIENTE -->
+        <div id="client-view" class="view">
+            <header class="top-bar">
+                <h2 id="client-greeting">Hola, Cliente</h2>
+                <button class="btn-danger btn-small logout-btn">🚪 Salir</button>
+            </header>
+            
+            <div class="client-balance-card">
+                <p>Tu Deuda Acumulada es de</p>
+                <h1 id="client-balance">RD$ 0.00</h1>
+                <div id="client-status"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title" style="margin-bottom: 20px;">📊 Historial de Movimientos</h3>
+                <div class="client-history-list" id="client-history-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDITAR -->
+    <div id="edit-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header"><h3>✏️ Editar Transacción</h3><button class="modal-close" onclick="closeEditModal()">✖</button></div>
+            <form id="edit-transaction-form">
+                <input type="hidden" id="edit-id"><input type="hidden" id="edit-client">
+                <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group"><label>Tipo</label><select id="edit-type" required><option value="prestamo">Préstamo</option><option value="pago">Abono</option></select></div>
+                    <div class="form-group"><label>Monto</label><input type="number" id="edit-amount" required min="1" step="0.01"></div>
+                </div>
+                <div class="form-group"><label>Motivo</label><input type="text" id="edit-motive" required></div>
+                <div class="form-group">
+                    <label>Modificar Fecha</label>
+                    <select id="edit-date-mode" onchange="toggleDateInput('edit-date-mode', 'edit-date-manual')">
+                        <option value="keep">Mantener actual</option>
+                        <option value="manual">Nueva Fecha (Manual)</option>
+                    </select>
+                    <input type="datetime-local" id="edit-date-manual" style="display:none; margin-top:5px;">
+                </div>
+                <button type="submit" class="btn-primary" style="margin-top:10px;">💾 Actualizar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // === 1. CONFIGURACIÓN DE SUPABASE ===
+        const { createClient } = supabase;
+        
+        // ¡Ya están puestas tus credenciales exactas!
+        const supabaseUrl = 'https://zqumzzqtfyygwouzvdjz.supabase.co';
+        const supabaseKey = 'sb_publishable_eFQbbsChAZ78dxe0QAvq2g_z7feko-T'; 
+        
+        const supabaseClient = createClient(supabaseUrl, supabaseKey);
+
+        let currentUser = null;
+
+        // === UTILIDADES ===
+        const formatMoney = (amount) => 'RD$ ' + parseFloat(amount).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        function showView(viewId) { document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById(viewId).classList.add('active'); }
+        function toggleDateInput(selectId, inputId) { document.getElementById(inputId).style.display = (document.getElementById(selectId).value === 'manual') ? 'block' : 'none'; }
+        
+        function formatDisplayDate(isoString) {
+            if(!isoString) return 'Sin fecha';
+            const d = new Date(isoString);
+            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        // --- MOSTRAR/OCULTAR CONTRASEÑA ---
+        document.getElementById('toggle-password').addEventListener('click', function() {
+            const passInput = document.getElementById('login-pass');
+            if (passInput.type === 'password') { passInput.type = 'text'; this.textContent = '🙈'; } 
+            else { passInput.type = 'password'; this.textContent = '👁️'; }
+        });
+
+        // === AUTENTICACIÓN (NUBE) ===
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const u = document.getElementById('login-user').value.trim();
+            const p = document.getElementById('login-pass').value;
+            
+            const btn = e.target.querySelector('button');
+            btn.textContent = 'Conectando...'; btn.disabled = true;
+
+            try {
+                const { data: users, error } = await supabaseClient
+                    .from('usuarios').select('*').eq('username', u).eq('password', p);
+
+                btn.textContent = 'Iniciar Sesión'; btn.disabled = false;
+
+                if (error) {
+                    alert('⚠️ ERROR DE CONEXIÓN A SUPABASE: \n' + error.message);
+                    return;
+                }
+
+                if (users && users.length > 0) {
+                    currentUser = users[0];
+                    document.getElementById('login-form').reset();
+                    document.getElementById('login-pass').type = 'password';
+                    document.getElementById('toggle-password').textContent = '👁️';
+
+                    if (currentUser.role === 'admin') {
+                        await updateAdminDashboard();
+                        showView('admin-view');
+                    } else {
+                        await updateClientDashboard();
+                        showView('client-view');
+                    }
+                } else {
+                    alert('❌ Usuario o contraseña incorrectos.\nO tal vez no creaste el admin con el script SQL en Supabase.');
+                }
+            } catch (err) {
+                btn.textContent = 'Iniciar Sesión'; btn.disabled = false;
+                alert('⚠️ ERROR DEL NAVEGADOR: \n' + err.message);
+            }
+        });
+
+        document.querySelectorAll('.logout-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if(confirm('¿Seguro que deseas salir?')) {
+                    currentUser = null;
+                    showView('login-view');
+                    document.getElementById('admin-client-details').style.display = 'none';
+                }
+            });
+        });
+
+        // === FUNCIONES DEL ADMINISTRADOR (NUBE) ===
+        document.getElementById('create-user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fullname = document.getElementById('new-fullname').value.trim();
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-password').value;
+            
+            const { data: exists } = await supabaseClient.from('usuarios').select('id').eq('username', username);
+            if (exists && exists.length > 0) return alert('❌ El usuario ya existe.');
+            
+            await supabaseClient.from('usuarios').insert([{ fullname, username, password, role: 'client' }]);
+            alert('✅ Cliente creado en la nube.');
+            document.getElementById('create-user-form').reset();
+            updateAdminDashboard();
+        });
+
+        async function changeUserPassword(username) {
+            const newPass = prompt(`Nueva contraseña para '${username}':`);
+            if (newPass && newPass.trim() !== "") {
+                await supabaseClient.from('usuarios').update({ password: newPass.trim() }).eq('username', username);
+                alert('✅ Contraseña actualizada.');
+                updateAdminDashboard();
+            }
+        }
+
+        async function deleteUser(username) {
+            if(confirm(`⚠️ CUIDADO ⚠️\n¿Eliminar al usuario '${username}' y todo su historial de la nube?`)) {
+                await supabaseClient.from('usuarios').delete().eq('username', username);
+                alert('🗑️ Usuario eliminado.');
+                document.getElementById('admin-client-details').style.display = 'none';
+                updateAdminDashboard();
+            }
+        }
+
+        document.getElementById('transaction-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const client = document.getElementById('trans-client').value;
+            const type = document.getElementById('trans-type').value;
+            const amount = parseFloat(document.getElementById('trans-amount').value);
+            const motive = document.getElementById('trans-motive').value.trim();
+            const dateMode = document.getElementById('trans-date-mode').value;
+            
+            let dateStr = new Date().toISOString();
+            if(dateMode === 'manual') {
+                const manVal = document.getElementById('trans-date-manual').value;
+                if(manVal) dateStr = new Date(manVal).toISOString();
+            }
+
+            // Validar deuda
+            if (type === 'pago') {
+                const { data: txs } = await supabaseClient.from('transacciones').select('type, amount').eq('client_username', client);
+                let debt = 0;
+                if(txs) txs.forEach(t => { t.type === 'prestamo' ? debt += t.amount : debt -= t.amount; });
+                if (amount > debt) return alert('❌ El pago supera la deuda actual del cliente.');
+            }
+
+            await supabaseClient.from('transacciones').insert([{ client_username: client, type, amount, motive, date: dateStr }]);
+            alert('✅ Transacción guardada en la nube.');
+            document.getElementById('transaction-form').reset();
+            document.getElementById('trans-date-manual').style.display = 'none';
+            updateAdminDashboard();
+            
+            const detailPanel = document.getElementById('admin-client-details');
+            if (detailPanel.style.display === 'block' && document.getElementById('admin-detail-name').dataset.username === client) {
+                viewClientDetails(client);
+            }
+        });
+
+        async function deleteTransaction(txId, clientUsername) {
+            if(confirm('¿Eliminar este registro de la nube?')) {
+                await supabaseClient.from('transacciones').delete().eq('id', txId);
+                updateAdminDashboard();
+                viewClientDetails(clientUsername);
+            }
+        }
+
+        async function openEditModal(txId) {
+            const { data: txs } = await supabaseClient.from('transacciones').select('*').eq('id', txId);
+            if(!txs || txs.length === 0) return;
+            const tx = txs[0];
+
+            document.getElementById('edit-id').value = tx.id;
+            document.getElementById('edit-client').value = tx.client_username;
+            document.getElementById('edit-type').value = tx.type;
+            document.getElementById('edit-amount').value = tx.amount;
+            document.getElementById('edit-motive').value = tx.motive;
+            document.getElementById('edit-date-mode').value = 'keep';
+            document.getElementById('edit-date-manual').style.display = 'none';
+            document.getElementById('edit-modal').style.display = 'flex';
+        }
+
+        function closeEditModal() { document.getElementById('edit-modal').style.display = 'none'; }
+
+        document.getElementById('edit-transaction-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-id').value;
+            const client = document.getElementById('edit-client').value;
+            const type = document.getElementById('edit-type').value;
+            const amount = parseFloat(document.getElementById('edit-amount').value);
+            const motive = document.getElementById('edit-motive').value;
+            const dateMode = document.getElementById('edit-date-mode').value;
+
+            let updateData = { type, amount, motive };
+            if(dateMode === 'manual') {
+                const manVal = document.getElementById('edit-date-manual').value;
+                if(manVal) updateData.date = new Date(manVal).toISOString();
+            }
+
+            await supabaseClient.from('transacciones').update(updateData).eq('id', id);
+            
+            closeEditModal();
+            updateAdminDashboard();
+            viewClientDetails(client);
+            alert('✅ Actualizado en la nube.');
+        });
+
+        // REFRESCAR PANEL ADMIN DESDE SUPABASE
+        async function updateAdminDashboard() {
+            const { data: users } = await supabaseClient.from('usuarios').select('*').eq('role', 'client').order('fullname');
+            const { data: allTxs } = await supabaseClient.from('transacciones').select('*');
+            
+            const select = document.getElementById('trans-client');
+            const tbody = document.querySelector('#admin-clients-table tbody');
+            const globalDebtEl = document.getElementById('admin-global-debt');
+            
+            select.innerHTML = '<option value="">Seleccione un cliente...</option>';
+            tbody.innerHTML = '';
+            let totalGlobalDebt = 0; 
+            
+            if (!users || users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px;">No hay clientes registrados.</td></tr>';
+            } else {
+                users.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client.username; option.textContent = `${client.fullname} (${client.username})`;
+                    select.appendChild(option);
+
+                    let debt = 0;
+                    if(allTxs) {
+                        const clientTxs = allTxs.filter(t => t.client_username === client.username);
+                        clientTxs.forEach(t => { t.type === 'prestamo' ? debt += t.amount : debt -= t.amount; });
+                    }
+                    totalGlobalDebt += debt; 
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${client.fullname}</strong></td>
+                        <td>@${client.username}</td>
+                        <td style="font-family:monospace; color:var(--secondary)">
+                            ${client.password} 
+                            <button onclick="changeUserPassword('${client.username}')" class="btn-primary btn-icon" style="padding:4px; font-size:0.9rem;" title="Cambiar Contraseña">🔑</button>
+                        </td>
+                        <td class="${debt > 0 ? 'text-red' : 'text-green'}">${formatMoney(debt)}</td>
+                        <td>
+                            <button class="btn-primary btn-small" onclick="viewClientDetails('${client.username}')">👁️ Detalles</button>
+                            <button class="btn-danger btn-small" onclick="deleteUser('${client.username}')">🗑️</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+            globalDebtEl.textContent = formatMoney(totalGlobalDebt);
+        }
+
+        async function viewClientDetails(username) {
+            const { data: userInfo } = await supabaseClient.from('usuarios').select('fullname').eq('username', username).single();
+            const { data: txs } = await supabaseClient.from('transacciones').select('*').eq('client_username', username).order('date', { ascending: false });
+            
+            document.getElementById('admin-detail-name').textContent = `Historial de: ${userInfo?.fullname || username}`;
+            document.getElementById('admin-detail-name').dataset.username = username;
+            
+            let debt = 0;
+            const tbody = document.querySelector('#admin-detail-history tbody');
+            tbody.innerHTML = '';
+
+            if(txs) {
+                txs.forEach(t => {
+                    t.type === 'prestamo' ? debt += t.amount : debt -= t.amount;
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td style="font-size:0.9rem;">${formatDisplayDate(t.date)}</td>
+                        <td><span style="background:${t.type==='prestamo'?'#fee2e2':'#d1fae5'}; color:${t.type==='prestamo'?'#dc2626':'#059669'}; padding:4px 8px; border-radius:4px; font-size:0.85rem; font-weight:bold;">${t.type.toUpperCase()}</span></td>
+                        <td>${t.motive}</td>
+                        <td class="${t.type === 'prestamo' ? 'text-red' : 'text-green'}">${t.type==='prestamo'?'+':'-'} ${formatMoney(t.amount)}</td>
+                        <td>
+                            <button class="btn-primary btn-icon" onclick="openEditModal('${t.id}')" title="Editar">✏️</button>
+                            <button class="btn-danger btn-icon" onclick="deleteTransaction('${t.id}', '${username}')" title="Eliminar">🗑️</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+
+            document.getElementById('admin-detail-balance').textContent = formatMoney(debt);
+            document.getElementById('admin-client-details').style.display = 'block';
+            document.getElementById('admin-client-details').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        document.getElementById('close-admin-details').addEventListener('click', () => { document.getElementById('admin-client-details').style.display = 'none'; });
+
+        // === FUNCIONES DEL CLIENTE (NUBE) ===
+        async function updateClientDashboard() {
+            document.getElementById('client-greeting').textContent = currentUser.fullname;
+
+            const { data: txs } = await supabaseClient.from('transacciones').select('*').eq('client_username', currentUser.username).order('date', { ascending: false });
+            let debt = 0;
+            
+            const historyList = document.getElementById('client-history-list');
+            historyList.innerHTML = '';
+
+            if (txs && txs.length > 0) {
+                txs.forEach(t => {
+                    const isPrestamo = t.type === 'prestamo';
+                    isPrestamo ? debt += t.amount : debt -= t.amount;
+
+                    const item = document.createElement('div');
+                    item.className = 'history-item';
+                    item.innerHTML = `
+                        <div class="history-info">
+                            <div class="history-icon ${isPrestamo ? 'icon-prestamo' : 'icon-pago'}">${isPrestamo ? '🔴' : '🟢'}</div>
+                            <div class="history-details">
+                                <h4>${isPrestamo ? 'Préstamo' : 'Abono'} ${t.motive ? '- ' + t.motive : ''}</h4>
+                                <p>${formatDisplayDate(t.date)}</p>
+                            </div>
+                        </div>
+                        <div class="history-amount ${isPrestamo ? 'text-red' : 'text-green'}">
+                            ${isPrestamo ? '+' : '-'} ${formatMoney(t.amount)}
+                        </div>
+                    `;
+                    historyList.appendChild(item);
+                });
+            } else {
+                historyList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Aún no tienes movimientos registrados.</div>';
+            }
+
+            const statusEl = document.getElementById('client-status');
+            document.getElementById('client-balance').textContent = formatMoney(debt);
+            
+            if (debt <= 0 && txs && txs.length > 0) {
+                statusEl.innerHTML = '<div style="background: rgba(16, 185, 129, 0.2); padding: 8px 15px; border-radius: 20px; display: inline-block; margin-top: 15px; font-weight: 600;">🎉 ¡Felicidades! Has saldado toda tu deuda.</div>';
+            } else {
+                statusEl.innerHTML = '';
+            }
+        }
+    </script>
+</body>
+</html>
