@@ -100,11 +100,39 @@
         .modal-header h3 { font-size: 1.2rem; margin: 0;}
         .modal-close { background: none; color: var(--text-muted); font-size: 1.5rem; padding: 0; }
         
+        /* === DISEÑO ADAPTABLE MEJORADO PARA MÓVILES === */
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
-            .client-balance-card h1 { font-size: 2.8rem; }
-            .history-item { flex-direction: column; align-items: flex-start; gap: 10px; }
-            .history-amount { align-self: flex-end; }
+            .client-balance-card h1 { font-size: 2.5rem; }
+            
+            .history-item { 
+                padding: 12px 10px; 
+                gap: 8px; 
+            }
+            .history-info { 
+                gap: 10px; 
+                flex: 1; 
+                min-width: 0; 
+            }
+            .history-icon { 
+                width: 40px; 
+                height: 40px; 
+                font-size: 1.2rem; 
+                flex-shrink: 0; 
+            }
+            .history-details h4 { 
+                font-size: 0.9rem; 
+                white-space: nowrap; 
+                overflow: hidden; 
+                text-overflow: ellipsis; 
+            }
+            .history-details p { 
+                font-size: 0.75rem; 
+            }
+            .history-amount { 
+                font-size: 0.95rem; 
+                white-space: nowrap; 
+            }
         }
     </style>
 </head>
@@ -250,7 +278,6 @@
         // === 1. CONFIGURACIÓN DE SUPABASE ===
         const { createClient } = supabase;
         
-        // ¡Ya están puestas tus credenciales exactas!
         const supabaseUrl = 'https://zqumzzqtfyygwouzvdjz.supabase.co';
         const supabaseKey = 'sb_publishable_eFQbbsChAZ78dxe0QAvq2g_z7feko-T'; 
         
@@ -376,7 +403,6 @@
                 if(manVal) dateStr = new Date(manVal).toISOString();
             }
 
-            // Validar deuda
             if (type === 'pago') {
                 const { data: txs } = await supabaseClient.from('transacciones').select('type, amount').eq('client_username', client);
                 let debt = 0;
@@ -444,7 +470,6 @@
             alert('✅ Actualizado en la nube.');
         });
 
-        // REFRESCAR PANEL ADMIN DESDE SUPABASE
         async function updateAdminDashboard() {
             const { data: users } = await supabaseClient.from('usuarios').select('*').eq('role', 'client').order('fullname');
             const { data: allTxs } = await supabaseClient.from('transacciones').select('*');
